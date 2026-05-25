@@ -38,7 +38,7 @@ sequenceDiagram
     participant Client as External Developer
     participant Gateway as veylix-api (Gateway)
     participant DApp as veylix-dapp (Core Engine)
-    participant DB as Supabase DB
+    participant DB as VEYLIX Database Node
 
     Client->>Gateway: POST /v1/text-to-3d (Header: x-api-key)
     Gateway->>Gateway: Normalize Auth to Bearer Token
