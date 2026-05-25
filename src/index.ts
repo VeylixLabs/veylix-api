@@ -2,6 +2,9 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
@@ -9,7 +12,24 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 const DAPP_URL = process.env.DAPP_URL || 'https://dapp.veylixlabs.xyz';
 
+app.use(helmet()); // Security headers
 app.use(cors());
+app.use(morgan('dev')); // Access logging
+
+// Rate limiting for API routes
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    error: 'Too Many Requests',
+    message: 'You have exceeded the 100 requests in 15 mins limit. Please try again later.'
+  }
+});
+
+// Apply rate limiter specifically to the proxy routes
+app.use('/v1', apiLimiter);
 
 // Health check endpoint
 app.get('/health', (req: Request, res: Response) => {
@@ -45,6 +65,8 @@ app.use(
   createProxyMiddleware({
     target: DAPP_URL,
     changeOrigin: true,
+    proxyTimeout: 300000, // 5 minutes to handle long AI tasks
+    timeout: 300000,
     pathRewrite: {
       '^/v1': '/api', // rewrite path /v1/foo -> /api/foo
     },
