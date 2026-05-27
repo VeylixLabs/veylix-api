@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "keywords": [
     "veylix",
@@ -22,15 +24,20 @@
     "express-rate-limit": "^8.5.2",
     "helmet": "^8.2.0",
     "http-proxy-middleware": "^3.0.0",
-    "morgan": "^1.10.1"
+    "morgan": "^1.10.1",
+    "swagger-jsdoc": "^6.3.0",
+    "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/morgan": "^1.9.10",
     "@types/node": "^20.12.12",
+    "@types/supertest": "^6.0.2",
+    "supertest": "^7.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.11.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^3.2.2"
   }
 }

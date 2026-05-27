@@ -1,0 +1,63 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Prevent duplicate runs for PRs from the same repo
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+        env:
+          NODE_ENV: test
+
+  deploy:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- Replace this step with your cloud provider's deploy action ---
+      # Examples:
+      #   Railway:  railwayapp/railway-github-action@v2
+      #   Fly.io:   superfly/flyctl-actions/deploy@master
+      #   Render:   uses their deploy hook (curl call)
+      - name: Deploy (placeholder)
+        run: |
+          echo "🚀 Deploy step: configure your cloud provider here."
+          echo "Recommended: Railway, Fly.io, or Render for Node.js gateways."
+        env:
+          # Set these secrets in your GitHub repo settings:
+          # Settings → Secrets and variables → Actions → New repository secret
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+          DAPP_URL: ${{ secrets.DAPP_URL }}

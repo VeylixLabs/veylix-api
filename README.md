@@ -10,6 +10,8 @@
     <a href="https://github.com/VeylixLabs/veylix-api/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-ISC-purple.svg?style=flat-square" alt="License" /></a>
     <a href="https://typescriptlang.org"><img src="https://img.shields.io/badge/Language-TypeScript_5.x-blue.svg?style=flat-square&logo=typescript" alt="TypeScript" /></a>
     <a href="https://expressjs.com"><img src="https://img.shields.io/badge/Framework-Express-lightgray.svg?style=flat-square&logo=express" alt="Express" /></a>
+    <img src="https://img.shields.io/badge/Tests-13%20passing-22c55e?style=flat-square" alt="13 tests passing" />
+    <img src="https://img.shields.io/badge/Docs-Swagger%20UI-85EA2D?style=flat-square&logo=swagger" alt="Swagger Docs" />
   </p>
 </div>
 
@@ -17,17 +19,22 @@
 
 ## 📖 Overview
 
-**`veylix-api`** is the official API Gateway and Reverse Proxy for the VEYLIX Network. It serves as the secure bridge between external third-party developers and the core `veylix-dapp` engine. 
+**`veylix-api`** is the official API Gateway and Reverse Proxy for the VEYLIX Network. It serves as the secure bridge between external third-party developers and the core `veylix-dapp` engine.
 
-By abstracting away the complex routing of the underlying dApp infrastructure, `veylix-api` provides a clean, predictable, and highly performant `v1` RESTful interface. It automatically handles API Key parsing, format normalization, and secure traffic forwarding.
+By abstracting away the internal routing of the dApp infrastructure, `veylix-api` provides a clean, predictable, and performant `v1` RESTful interface — with API Key normalization, CORS enforcement, rate limiting, DDoS protection, and interactive API documentation built in.
+
+---
 
 ## ✨ Features
 
-- 🚀 **Blazing Fast Proxying:** Built on top of Express and `http-proxy-middleware` for minimal overhead and ultra-low latency.
-- 🔐 **Smart Auth Resolution:** Seamlessly supports both `x-api-key` headers and `Authorization: Bearer` tokens.
-- 🧱 **Decoupled Architecture:** Pure reverse proxy design. Zero database dependencies; all business logic and rate-limiting are securely evaluated downstream by the VEYLIX dApp.
-- 🛡️ **TypeScript Native:** 100% strongly typed codebase for maximum reliability and maintainability.
-- 🌍 **CORS Ready:** Pre-configured Cross-Origin Resource Sharing for modern web applications.
+- 🚀 **Blazing Fast Proxying:** Express + `http-proxy-middleware` for minimal overhead.
+- 🔐 **Smart Auth Resolution:** Accepts both `X-Api-Key` headers and `Authorization: Bearer` tokens, normalizing them transparently before forwarding.
+- 🛡️ **CORS Whitelist:** Only permits requests from known VEYLIX origins (`veylixlabs.xyz`, `dapp.veylixlabs.xyz`, `app.veylixlabs.xyz`). CLI/SDK calls without an `Origin` header are always allowed through.
+- 🧱 **Security Headers:** Hardened with `helmet` (CSP, HSTS, X-Frame-Options, etc.).
+- ⏱️ **DDoS Protection:** 100 requests per 15 minutes per IP via `express-rate-limit`.
+- 📖 **Interactive API Docs:** Swagger UI served at `/api/docs` — no login required.
+- ✅ **Tested:** 13 unit/integration tests via Vitest + supertest.
+- 🔄 **CI/CD:** GitHub Actions — tests on every push/PR, deploy on merge to `main`.
 
 ---
 
@@ -40,13 +47,13 @@ sequenceDiagram
     participant DApp as veylix-dapp (Core Engine)
     participant DB as VEYLIX Database Node
 
-    Client->>Gateway: POST /v1/text-to-3d (Header: x-api-key)
-    Gateway->>Gateway: Normalize Auth to Bearer Token
-    Gateway->>DApp: Forward to /api/text-to-3d
-    DApp->>DB: Validate API Key & Update Usage
-    DB-->>DApp: Validation Success (200 OK)
-    DApp-->>Gateway: Return 3D Asset Data
-    Gateway-->>Client: Final JSON Response
+    Client->>Gateway: GET /v1/marketplace/listings (X-Api-Key: ...)
+    Gateway->>Gateway: CORS check + Rate limit + Header normalize
+    Gateway->>DApp: Forward to /api/marketplace/listings (Authorization: Bearer ...)
+    DApp->>DB: Validate API Key & fetch data
+    DB-->>DApp: Data response
+    DApp-->>Gateway: JSON response
+    Gateway-->>Client: Final JSON response
 ```
 
 ---
@@ -55,11 +62,9 @@ sequenceDiagram
 
 ### 1. Prerequisites
 - [Node.js](https://nodejs.org/) (v18.x or later)
-- [npm](https://npmjs.com) or [pnpm](https://pnpm.io)
+- [npm](https://npmjs.com)
 
 ### 2. Installation
-
-Clone the repository and install dependencies:
 
 ```bash
 git clone https://github.com/VeylixLabs/veylix-api.git
@@ -74,19 +79,20 @@ Create a `.env` file in the root directory:
 ```env
 PORT=8080
 DAPP_URL=https://dapp.veylixlabs.xyz
+
+# Optional: add a custom allowed CORS origin for local dev/staging
+ALLOWED_ORIGIN=http://localhost:3000
 ```
 
 ### 4. Development
 
-Run the gateway in watch mode with `tsx`:
-
 ```bash
-npm run dev
+npm run dev        # Watch mode with tsx
+npm test           # Run all 13 tests
+npm run test:watch # Tests in interactive watch mode
 ```
 
 ### 5. Production Build
-
-Compile the TypeScript code and start the server:
 
 ```bash
 npm run build
@@ -95,28 +101,62 @@ npm start
 
 ---
 
-## 💻 Usage Example
+## 📖 API Documentation
 
-Once the gateway is running, you can interact with the VEYLIX core APIs securely from any external server. 
+Once the gateway is running, visit:
 
-> **Note:** You must generate a Developer API Key from the VEYLIX dApp Developer Console first.
+```
+http://localhost:8080/api/docs
+```
+
+This serves the **Swagger UI** — an interactive explorer for all available `/v1` endpoints. The raw OpenAPI 3.0.3 spec is also available as JSON:
+
+```
+http://localhost:8080/api/docs.json
+```
+
+---
+
+## 💻 Usage Examples
+
+> **Note:** Generate a Developer API Key from the VEYLIX dApp Developer Console first.
 
 ```bash
-# Example: Triggering a Text-to-3D generation task
-curl -X POST http://localhost:8080/v1/text-to-3d/create-task \
-  -H "Authorization: Bearer veylix_YourApiKeyHere..." \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "A futuristic crystal carriage glowing in neon purple"
-  }'
+# Using X-Api-Key header (normalized to Bearer by the gateway)
+curl http://localhost:8080/v1/marketplace/listings?limit=5 \
+  -H "X-Api-Key: vyx_YourApiKeyHere"
+
+# Using Authorization: Bearer directly
+curl http://localhost:8080/v1/assets/asset-abc123 \
+  -H "Authorization: Bearer vyx_YourApiKeyHere"
+
+# Health check (no auth required)
+curl http://localhost:8080/health
 ```
 
 ---
 
 ## 🔒 Security Posture
 
-- **Stateless Proxy:** The gateway does not store, cache, or log sensitive payload data.
-- **Key Hashes:** The VEYLIX ecosystem only stores hashes of your API keys. If you lose your API key, it cannot be recovered and must be revoked and regenerated via the dApp dashboard.
+| Layer | Mechanism |
+| :--- | :--- |
+| Security headers | `helmet` (CSP, HSTS, X-Frame-Options, nosniff) |
+| CORS | Explicit origin whitelist — unknown origins blocked |
+| Rate limiting | 100 req / 15 min per IP (`express-rate-limit`) |
+| Auth normalization | `X-Api-Key` → `Authorization: Bearer` at gateway edge |
+| Upstream auth | `withAuth` HOC in `veylix-dapp` validates all API Keys |
+| Key storage | Only key hashes are stored — lost keys cannot be recovered |
+| AI task timeout | 5-minute proxy timeout for long-running 3D generation tasks |
+
+---
+
+## 🧪 Testing
+
+```bash
+npm test
+```
+
+The test suite covers: health endpoint, 404 fallback, CORS origin enforcement (allowed + blocked), header normalization (`X-Api-Key` → `Authorization`), and Helmet security header presence.
 
 ---
 
