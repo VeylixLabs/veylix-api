@@ -6,7 +6,6 @@ on:
   pull_request:
     branches: [main]
 
-# Prevent duplicate runs for PRs from the same repo
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -38,26 +37,26 @@ jobs:
           NODE_ENV: test
 
   deploy:
-    name: Deploy to Production
+    name: Deploy to Vercel Production
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- Replace this step with your cloud provider's deploy action ---
-      # Examples:
-      #   Railway:  railwayapp/railway-github-action@v2
-      #   Fly.io:   superfly/flyctl-actions/deploy@master
-      #   Render:   uses their deploy hook (curl call)
-      - name: Deploy (placeholder)
-        run: |
-          echo "🚀 Deploy step: configure your cloud provider here."
-          echo "Recommended: Railway, Fly.io, or Render for Node.js gateways."
-        env:
-          # Set these secrets in your GitHub repo settings:
-          # Settings → Secrets and variables → Actions → New repository secret
-          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
-          DAPP_URL: ${{ secrets.DAPP_URL }}
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Pull Vercel environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build Vercel output
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

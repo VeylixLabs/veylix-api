@@ -2,11 +2,11 @@
   "name": "veylix-api",
   "version": "1.0.0",
   "description": "Public API Gateway for VEYLIX Ecosystem",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -34,6 +34,8 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^20.12.12",
     "@types/supertest": "^6.0.2",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
     "supertest": "^7.1.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.11.0",
