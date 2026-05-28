@@ -26,6 +26,12 @@ export function createApp() {
     'https://dapp.veylixlabs.xyz',
     'https://app.veylixlabs.xyz',
     'https://www.veylixlabs.xyz',
+    'http://localhost:3000',
+    'http://localhost:3100',
+    'http://localhost:3101',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3100',
+    'http://127.0.0.1:3101',
     ...(process.env.ALLOWED_ORIGIN ? [process.env.ALLOWED_ORIGIN] : []),
   ];
 
@@ -49,7 +55,7 @@ export function createApp() {
         callback(new Error(`Origin '${origin}' not permitted by CORS policy`));
       },
       credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Api-Key'],
     }),
   );
@@ -121,7 +127,10 @@ export function createApp() {
       changeOrigin: true,
       proxyTimeout: 300_000, // 5 minutes for long AI tasks
       timeout: 300_000,
-      pathRewrite: { '^/v1': '/api' },
+      // Express strips the /v1 mount path before the proxy middleware runs.
+      // Example: external /v1/marketplace/listings reaches this middleware as
+      // /marketplace/listings, so prepend /api explicitly for the dApp backend.
+      pathRewrite: (path) => `/api${path}`,
       on: {
         proxyReq: (proxyReq, req) => {
           console.log(`[Proxy] ${req.method} ${req.url} -> ${DAPP_URL}${proxyReq.path}`);

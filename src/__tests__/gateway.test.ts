@@ -1,25 +1,21 @@
-import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import request from 'supertest';
 import { createApp } from '../app';
 
-// ---------------------------------------------------------------------------
-// Mock http-proxy-middleware to prevent real network calls in tests.
-// The proxy itself is tested by the integration layer; here we only care
-// about the gateway's own middleware behaviour.
-// ---------------------------------------------------------------------------
 vi.mock('http-proxy-middleware', () => ({
-  createProxyMiddleware: () => (_req: any, res: any, next: any) => {
-    // Simulate the proxy being reachable — just pass through in unit tests
-    res.status(200).json({ proxied: true });
+  createProxyMiddleware: (options: any) => (req: any, res: any) => {
+    const rewrittenPath =
+      typeof options.pathRewrite === 'function'
+        ? options.pathRewrite(req.url, req)
+        : req.url;
+
+    res.status(200).json({ proxied: true, rewrittenPath });
   },
 }));
 
 const app = createApp();
 
 describe('VEYLIX API Gateway', () => {
-  // -------------------------------------------------------------------------
-  // Health check
-  // -------------------------------------------------------------------------
   describe('GET /health', () => {
     it('should return 200 with status "healthy"', async () => {
       const res = await request(app).get('/health');
@@ -37,9 +33,6 @@ describe('VEYLIX API Gateway', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // 404 fallback for unmatched routes
-  // -------------------------------------------------------------------------
   describe('404 fallback', () => {
     it('should return 404 for unknown routes', async () => {
       const res = await request(app).get('/unknown-route');
@@ -56,20 +49,12 @@ describe('VEYLIX API Gateway', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Header normalization: x-api-key → Authorization: Bearer
-  // -------------------------------------------------------------------------
-  describe('Header normalization (x-api-key → Authorization)', () => {
+  describe('Header normalization (x-api-key -> Authorization)', () => {
     it('should convert x-api-key to Authorization: Bearer when no auth header exists', async () => {
-      // The proxy mock passes through, but we can verify via a spy on the
-      // proxy middleware call. Easier: check the absence of x-api-key
-      // in the forwarded request — we accomplish this by asserting the
-      // middleware does not throw and returns a successful proxy response.
       const res = await request(app)
         .get('/v1/assets')
         .set('X-Api-Key', 'test-key-abc123');
 
-      // The mock proxy accepted the request — normalization succeeded
       expect(res.status).toBe(200);
     });
 
@@ -83,9 +68,17 @@ describe('VEYLIX API Gateway', () => {
     });
   });
 
-  // -------------------------------------------------------------------------
-  // CORS — origin whitelist
-  // -------------------------------------------------------------------------
+  describe('Proxy path mapping', () => {
+    it('should rewrite /v1 routes to the dApp /api namespace', async () => {
+      const res = await request(app)
+        .get('/v1/marketplace/listings?limit=10')
+        .set('X-Api-Key', 'test-key-abc123');
+
+      expect(res.status).toBe(200);
+      expect(res.body.rewrittenPath).toBe('/api/marketplace/listings?limit=10');
+    });
+  });
+
   describe('CORS policy', () => {
     it('should allow requests from whitelisted origin veylixlabs.xyz', async () => {
       const res = await request(app)
@@ -105,13 +98,20 @@ describe('VEYLIX API Gateway', () => {
       expect(res.headers['access-control-allow-origin']).toBe('https://dapp.veylixlabs.xyz');
     });
 
+    it('should allow requests from localhost docs during development', async () => {
+      const res = await request(app)
+        .options('/v1/assets')
+        .set('Origin', 'http://localhost:3101')
+        .set('Access-Control-Request-Method', 'GET');
+
+      expect(res.headers['access-control-allow-origin']).toBe('http://localhost:3101');
+    });
+
     it('should block requests from an unknown origin', async () => {
       const res = await request(app)
         .get('/health')
         .set('Origin', 'https://evil-site.com');
 
-      // cors middleware responds with 500 on policy violation;
-      // the key assertion is that the allow-origin header is NOT set.
       expect(res.headers['access-control-allow-origin']).toBeUndefined();
     });
 
@@ -124,17 +124,15 @@ describe('VEYLIX API Gateway', () => {
       const res = await request(app)
         .options('/v1/assets')
         .set('Origin', 'https://veylixlabs.xyz')
-        .set('Access-Control-Request-Method', 'POST');
+        .set('Access-Control-Request-Method', 'PATCH');
 
       const methods = res.headers['access-control-allow-methods'] ?? '';
       expect(methods).toContain('GET');
       expect(methods).toContain('POST');
+      expect(methods).toContain('PATCH');
     });
   });
 
-  // -------------------------------------------------------------------------
-  // Security headers (Helmet)
-  // -------------------------------------------------------------------------
   describe('Security headers (Helmet)', () => {
     it('should set X-Content-Type-Options: nosniff', async () => {
       const res = await request(app).get('/health');
