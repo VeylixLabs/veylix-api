@@ -1,7 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { createProxyMiddleware } from 'http-proxy-middleware';
+import { createProxyMiddleware, responseInterceptor } from 'http-proxy-middleware';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
@@ -135,6 +135,31 @@ export function createApp() {
         proxyReq: (proxyReq, req) => {
           console.log(`[Proxy] ${req.method} ${req.url} -> ${DAPP_URL}${proxyReq.path}`);
         },
+        proxyRes: responseInterceptor(async (responseBuffer, proxyRes, req, res) => {
+          const expressReq = req as Request;
+          if (expressReq.originalUrl?.startsWith('/v1/marketplace/listings') || expressReq.originalUrl?.startsWith('/v1/assets/public')) {
+            try {
+              const data = JSON.parse(responseBuffer.toString('utf8'));
+              if (data.listings) {
+                data.listings.forEach((l: any) => {
+                  if (l.assets) {
+                    l.assets.model_url = null;
+                    l.assets.prompt = null;
+                  }
+                });
+              } else if (data.assets) {
+                data.assets.forEach((a: any) => {
+                  a.model_url = null;
+                  a.prompt = null;
+                });
+              }
+              return JSON.stringify(data);
+            } catch (e) {
+              return responseBuffer;
+            }
+          }
+          return responseBuffer;
+        }),
         error: (err, _req, res) => {
           console.error('[Proxy Error]', err);
           const response = res as any;
